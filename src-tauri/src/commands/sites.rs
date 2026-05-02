@@ -1,9 +1,9 @@
 use crate::models::site::{CreateSiteInput, Site, SiteTemplate};
 use crate::services::{compose, hosts, sites as site_svc};
-use crate::AppDataDir;
+use crate::{AppDataDir, LogProcesses};
 use chrono::Utc;
 use sqlx::SqlitePool;
-use tauri::State;
+use tauri::{Emitter, State, Window};
 use uuid::Uuid;
 
 #[tauri::command]
@@ -200,5 +200,66 @@ pub async fn open_site_folder(
         _ => return Err(format!("App inconnue: {}", app)),
     }
 
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stream_site_logs(
+    site_id: String,
+    window: Window,
+    data_dir: State<'_, AppDataDir>,
+    log_procs: State<'_, LogProcesses>,
+) -> Result<(), String> {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    // Tuer stream précédent si actif
+    {
+        let pid = log_procs.0.lock().unwrap().remove(&site_id);
+        if let Some(pid) = pid {
+            let _ = std::process::Command::new("kill")
+                .args(["-TERM", &pid.to_string()])
+                .output();
+        }
+    }
+
+    let dir = compose::site_dir(&data_dir.0, &site_id);
+    let event_name = format!("site:log:{}", site_id);
+
+    let mut child = tokio::process::Command::new("docker")
+        .args(["compose", "logs", "-f", "--tail=100"])
+        .current_dir(dir)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    if let Some(pid) = child.id() {
+        log_procs.0.lock().unwrap().insert(site_id, pid);
+    }
+
+    tokio::spawn(async move {
+        if let Some(stdout) = child.stdout.take() {
+            let mut lines = BufReader::new(stdout).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                let _ = window.emit(&event_name, line);
+            }
+        }
+        let _ = child.wait().await;
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_site_logs(
+    site_id: String,
+    log_procs: State<'_, LogProcesses>,
+) -> Result<(), String> {
+    let pid = log_procs.0.lock().unwrap().remove(&site_id);
+    if let Some(pid) = pid {
+        let _ = std::process::Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
+            .output();
+    }
     Ok(())
 }

@@ -2,13 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/atoms/Button";
 import { SiteCard } from "@/components/molecules/SiteCard";
 import { CreateSiteModal } from "@/components/molecules/CreateSiteModal";
+import { LogsModal } from "@/components/molecules/LogsModal";
 import { useSites } from "@/hooks/useSites";
-import type { CreateSiteInput } from "@/types/site";
+import type { CreateSiteInput, Site } from "@/types/site";
 
 export function SitesPage() {
   const { sites, fetchSites, createSite, deleteSite, startSite, stopSite, refreshStatus } = useSites();
   const [modalOpen, setModalOpen] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [logsSite, setLogsSite] = useState<Site | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -103,6 +105,7 @@ export function SitesPage() {
               onStart={() => handleStart(site.id)}
               onStop={() => handleStop(site.id)}
               onDelete={() => handleDelete(site.id)}
+              onLogs={() => setLogsSite(site)}
             />
           ))}
         </div>
@@ -113,6 +116,15 @@ export function SitesPage() {
         onClose={() => setModalOpen(false)}
         onCreate={handleCreate}
       />
+
+      {logsSite && (
+        <LogsModal
+          open={!!logsSite}
+          siteId={logsSite.id}
+          siteName={logsSite.name}
+          onClose={() => setLogsSite(null)}
+        />
+      )}
     </div>
   );
 }

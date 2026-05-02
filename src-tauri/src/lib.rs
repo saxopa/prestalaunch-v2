@@ -3,10 +3,13 @@ mod models;
 mod services;
 
 use services::db::init_db;
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use tauri::Manager;
 
 pub struct AppDataDir(pub PathBuf);
+pub struct LogProcesses(pub Mutex<HashMap<String, u32>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -26,6 +29,7 @@ pub fn run() {
 
             app.manage(pool);
             app.manage(AppDataDir(app_data_dir));
+            app.manage(LogProcesses(Mutex::new(HashMap::new())));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -42,6 +46,8 @@ pub fn run() {
             commands::sites::stop_site,
             commands::sites::get_site_status,
             commands::sites::open_site_folder,
+            commands::sites::stream_site_logs,
+            commands::sites::stop_site_logs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
