@@ -35,6 +35,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::app::get_onboarding_done,
             commands::app::set_onboarding_done,
+            commands::app::get_data_dir,
             commands::engine::check_docker,
             commands::engine::start_docker,
             commands::engine::install_docker,
@@ -52,6 +53,7 @@ pub fn run() {
             commands::sites::disable_ssl,
             commands::sites::create_template,
             commands::sites::delete_template,
+            commands::sites::get_site_modules,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

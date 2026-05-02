@@ -1,4 +1,4 @@
-use crate::models::site::{CreateSiteInput, Site, SiteTemplate};
+use crate::models::site::{CreateSiteInput, PsModule, Site, SiteTemplate};
 use crate::services::{compose, hosts, sites as site_svc};
 use crate::{AppDataDir, LogProcesses};
 use chrono::Utc;
@@ -321,6 +321,39 @@ pub async fn stop_site_logs(
             .output();
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn get_site_modules(site_id: String) -> Result<Vec<PsModule>, String> {
+    let container = format!("pl_{}_mysql", site_id);
+    let output = tokio::process::Command::new("docker")
+        .args([
+            "exec", &container,
+            "mysql", "-uprestashop", "-pprestashop", "prestashop",
+            "--batch", "--skip-column-names",
+            "-e", "SELECT name, active, version FROM ps_module ORDER BY name",
+        ])
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    let modules = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let p: Vec<&str> = line.split('\t').collect();
+            if p.len() >= 3 {
+                Some(PsModule { name: p[0].to_string(), active: p[1] == "1", version: p[2].to_string() })
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(modules)
 }
 
 #[tauri::command]

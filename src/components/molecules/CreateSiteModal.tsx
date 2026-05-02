@@ -217,7 +217,7 @@ export function CreateSiteModal({ open, onClose, onCreate }: Props) {
                 onChange={(e) => { setPsVersion(e.target.value); setSelectedTpl(null); }}
                 className="w-full bg-surface-800 border border-surface-700 rounded-lg px-2.5 py-2 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors"
               >
-                {["8.1.7", "8.1.6", "1.7.8"].map((v) => <option key={v}>{v}</option>)}
+                {["8.1.7", "8.1.6", "8.1.5", "8.1.4", "8.1.3", "8.0.5", "8.0.4", "8.0.3", "1.7.8.11", "1.7.8.10", "1.7.8", "1.6.1.24"].map((v) => <option key={v}>{v}</option>)}
               </select>
             </div>
             <div>
@@ -227,7 +227,7 @@ export function CreateSiteModal({ open, onClose, onCreate }: Props) {
                 onChange={(e) => { setPhpVersion(e.target.value); setSelectedTpl(null); }}
                 className="w-full bg-surface-800 border border-surface-700 rounded-lg px-2.5 py-2 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors"
               >
-                {["8.3", "8.2", "8.1", "7.4"].map((v) => <option key={v}>{v}</option>)}
+                {["8.3", "8.2", "8.1", "8.0", "7.4", "7.3", "7.2"].map((v) => <option key={v}>{v}</option>)}
               </select>
             </div>
             <div>
@@ -237,7 +237,7 @@ export function CreateSiteModal({ open, onClose, onCreate }: Props) {
                 onChange={(e) => { setMysqlVersion(e.target.value); setSelectedTpl(null); }}
                 className="w-full bg-surface-800 border border-surface-700 rounded-lg px-2.5 py-2 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors"
               >
-                {["8.0", "5.7"].map((v) => <option key={v}>{v}</option>)}
+                {["8.4", "8.0", "5.7"].map((v) => <option key={v}>{v}</option>)}
               </select>
             </div>
           </div>

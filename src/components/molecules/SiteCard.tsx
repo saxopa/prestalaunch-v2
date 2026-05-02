@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { useNavigate } from "react-router-dom";
 import { StatusDot } from "@/components/atoms/StatusDot";
 import { Button } from "@/components/atoms/Button";
 import type { Site } from "@/types/site";
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function SiteCard({ site, onStart, onStop, onDelete, onLogs, onEnableSsl, onDisableSsl, loading }: Props) {
+  const navigate = useNavigate();
   const isRunning = site.status === "running";
   const isStarting = site.status === "starting";
   const canToggle = !loading && site.status !== "starting";
@@ -34,10 +36,10 @@ export function SiteCard({ site, onStart, onStop, onDelete, onLogs, onEnableSsl,
     <div className="bg-surface-900 border border-surface-800 rounded-xl p-4 flex flex-col gap-3 hover:border-surface-700 transition-colors">
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+        <div className="min-w-0 cursor-pointer" onClick={() => navigate(`/sites/${site.id}`)}>
           <div className="flex items-center gap-2 mb-0.5">
             <StatusDot status={site.status} />
-            <span className="text-sm font-semibold text-white truncate">{site.name}</span>
+            <span className="text-sm font-semibold text-white truncate hover:text-brand-400 transition-colors">{site.name}</span>
           </div>
           {isRunning ? (
             <div className="flex items-center gap-1.5 flex-wrap">

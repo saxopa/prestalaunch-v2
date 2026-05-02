@@ -24,6 +24,13 @@ pub struct CreateSiteInput {
     pub mysql_version: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PsModule {
+    pub name: String,
+    pub active: bool,
+    pub version: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct SiteTemplate {
     pub id: String,
