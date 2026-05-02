@@ -64,7 +64,7 @@ pub fn generate_compose(
       DB_NAME: prestashop
       DB_USER: prestashop
       DB_PASSWD: prestashop
-      PS_DOMAIN: "{domain}"
+      PS_DOMAIN: "{domain}:{port}"
       PS_LANGUAGE: fr
       PS_COUNTRY: FR
       PS_INSTALL_AUTO: "1"
