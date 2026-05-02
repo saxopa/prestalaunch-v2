@@ -122,7 +122,6 @@ where
     F: Fn(InstallProgress) + Send + Sync + 'static,
 {
     use futures_util::StreamExt;
-    use std::io::Write;
     use tokio::fs;
 
     on_progress(InstallProgress {

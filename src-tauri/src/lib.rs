@@ -3,7 +3,10 @@ mod models;
 mod services;
 
 use services::db::init_db;
+use std::path::PathBuf;
 use tauri::Manager;
+
+pub struct AppDataDir(pub PathBuf);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -15,13 +18,14 @@ pub fn run() {
                 .app_data_dir()
                 .expect("Failed to resolve app data dir");
 
-            tauri::async_runtime::block_on(async move {
-                let pool = init_db(app_data_dir)
+            let pool = tauri::async_runtime::block_on(async {
+                init_db(app_data_dir.clone())
                     .await
-                    .expect("Failed to initialize database");
-                app.manage(pool);
+                    .expect("Failed to initialize database")
             });
 
+            app.manage(pool);
+            app.manage(AppDataDir(app_data_dir));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -30,6 +34,13 @@ pub fn run() {
             commands::engine::check_docker,
             commands::engine::start_docker,
             commands::engine::install_docker,
+            commands::sites::list_sites,
+            commands::sites::list_templates,
+            commands::sites::create_site,
+            commands::sites::delete_site,
+            commands::sites::start_site,
+            commands::sites::stop_site,
+            commands::sites::get_site_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

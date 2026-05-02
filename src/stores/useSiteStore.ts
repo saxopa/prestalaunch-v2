@@ -5,7 +5,7 @@ interface SiteStore {
   sites: Site[];
   selectedSiteId: string | null;
   setSites: (sites: Site[]) => void;
-  updateSiteStatus: (id: string, status: Site["status"]) => void;
+  updateSite: (id: string, patch: Partial<Site>) => void;
   addSite: (site: Site) => void;
   removeSite: (id: string) => void;
   selectSite: (id: string | null) => void;
@@ -17,9 +17,9 @@ export const useSiteStore = create<SiteStore>((set) => ({
 
   setSites: (sites) => set({ sites }),
 
-  updateSiteStatus: (id, status) =>
+  updateSite: (id, patch) =>
     set((state) => ({
-      sites: state.sites.map((s) => (s.id === id ? { ...s, status } : s)),
+      sites: state.sites.map((s) => (s.id === id ? { ...s, ...patch } : s)),
     })),
 
   addSite: (site) =>
