@@ -149,7 +149,7 @@ networks:
     )
 }
 
-pub fn generate_nginx_conf(domain: &str) -> String {
+pub fn generate_nginx_conf(domain: &str, ps_port: i64) -> String {
     format!(
         r#"events {{}}
 http {{
@@ -162,7 +162,7 @@ http {{
 
         location / {{
             proxy_pass http://prestashop:80;
-            proxy_set_header Host $host;
+            proxy_set_header Host {domain}:{ps_port};
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto https;
@@ -171,5 +171,6 @@ http {{
 }}
 "#,
         domain = domain,
+        ps_port = ps_port,
     )
 }

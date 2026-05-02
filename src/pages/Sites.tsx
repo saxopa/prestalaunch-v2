@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { Button } from "@/components/atoms/Button";
 import { SiteCard } from "@/components/molecules/SiteCard";
 import { CreateSiteModal } from "@/components/molecules/CreateSiteModal";
@@ -47,7 +48,8 @@ export function SitesPage() {
   }, [stopSite]);
 
   const handleDelete = useCallback(async (id: string) => {
-    if (!confirm("Supprimer ce site ? Les données Docker seront supprimées.")) return;
+    const ok = await ask("Supprimer ce site ? Les données Docker seront supprimées.", { title: "Supprimer le site", kind: "warning" });
+    if (!ok) return;
     setLoadingId(id);
     try { await deleteSite(id); }
     finally { setLoadingId(null); }

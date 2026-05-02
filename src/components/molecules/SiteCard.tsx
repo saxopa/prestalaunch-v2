@@ -121,14 +121,7 @@ export function SiteCard({ site, onStart, onStop, onDelete, onLogs, onEnableSsl,
                 }
               </svg>
             </Button>
-            <Button size="icon" variant="ghost" title="Ouvrir dans le navigateur"
-              onClick={() => openUrl(httpsUrl ?? httpUrl)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-              </svg>
-            </Button>
-            <Button size="icon" variant="ghost" title="PhpMyAdmin"
+<Button size="icon" variant="ghost" title="PhpMyAdmin"
               onClick={() => openUrl(`http://${site.domain}:${site.pma_port}`)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />

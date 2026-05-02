@@ -6,6 +6,47 @@ use sqlx::SqlitePool;
 use tauri::{Emitter, State, Window};
 use uuid::Uuid;
 
+async fn ensure_mkcert() -> Result<std::path::PathBuf, String> {
+    if let Ok(path) = which::which("mkcert") {
+        return Ok(path);
+    }
+
+    let brew = which::which("brew").map_err(|_| {
+        "mkcert introuvable et Homebrew absent. Installez mkcert : brew install mkcert && mkcert -install".to_string()
+    })?;
+
+    let out = tokio::process::Command::new(&brew)
+        .args(["install", "mkcert"])
+        .output()
+        .await
+        .map_err(|e| format!("Échec brew install mkcert : {e}"))?;
+
+    if !out.status.success() {
+        return Err(format!(
+            "brew install mkcert échoué : {}",
+            String::from_utf8_lossy(&out.stderr)
+        ));
+    }
+
+    let mkcert = which::which("mkcert")
+        .map_err(|_| "mkcert introuvable après installation Homebrew".to_string())?;
+
+    let out = tokio::process::Command::new(&mkcert)
+        .arg("-install")
+        .output()
+        .await
+        .map_err(|e| format!("mkcert -install échoué : {e}"))?;
+
+    if !out.status.success() {
+        return Err(format!(
+            "mkcert -install échoué : {}",
+            String::from_utf8_lossy(&out.stderr)
+        ));
+    }
+
+    Ok(mkcert)
+}
+
 #[tauri::command]
 pub async fn list_sites(pool: State<'_, SqlitePool>) -> Result<Vec<Site>, String> {
     sqlx::query_as::<_, Site>("SELECT * FROM sites ORDER BY created_at DESC")
@@ -87,7 +128,7 @@ pub async fn create_site(
     pool: State<'_, SqlitePool>,
     data_dir: State<'_, AppDataDir>,
 ) -> Result<Site, String> {
-    let (port, pma_port, ssl_port, mail_port) = compose::find_free_ports(&pool).await?;
+    let (port, pma_port, _, _) = compose::find_free_ports(&pool).await?;
     let site = Site {
         id: Uuid::new_v4().to_string(),
         name: input.name,
@@ -97,8 +138,8 @@ pub async fn create_site(
         mysql_version: input.mysql_version,
         port,
         pma_port,
-        ssl_port: Some(ssl_port),
-        mail_port: Some(mail_port),
+        ssl_port: None,
+        mail_port: None,
         status: "stopped".to_string(),
         created_at: Utc::now().to_rfc3339(),
     };
@@ -364,9 +405,7 @@ pub async fn enable_ssl(
     pool: State<'_, SqlitePool>,
     data_dir: State<'_, AppDataDir>,
 ) -> Result<Site, String> {
-    // Vérifier mkcert installé
-    let mkcert_path = which::which("mkcert")
-        .map_err(|_| "mkcert introuvable. Installez-le : brew install mkcert && mkcert -install".to_string())?;
+    let mkcert_path = ensure_mkcert().await?;
 
     let site = sqlx::query_as::<_, Site>("SELECT * FROM sites WHERE id = ?")
         .bind(&site_id)
@@ -409,13 +448,13 @@ pub async fn enable_ssl(
 
     if !output.status.success() {
         return Err(format!(
-            "mkcert échoué: {}. Avez-vous exécuté `mkcert -install` ?",
+            "mkcert échoué : {}",
             String::from_utf8_lossy(&output.stderr)
         ));
     }
 
     // Écrire nginx.conf
-    let nginx_conf = compose::generate_nginx_conf(&site.domain);
+    let nginx_conf = compose::generate_nginx_conf(&site.domain, site.port);
     tokio::fs::write(dir.join("nginx.conf"), nginx_conf)
         .await
         .map_err(|e| e.to_string())?;
@@ -445,6 +484,7 @@ pub async fn enable_ssl(
             .current_dir(&dir)
             .output()
             .await;
+
     }
 
     let updated = sqlx::query_as::<_, Site>("SELECT * FROM sites WHERE id = ?")
