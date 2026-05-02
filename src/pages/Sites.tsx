@@ -7,7 +7,7 @@ import { useSites } from "@/hooks/useSites";
 import type { CreateSiteInput, Site } from "@/types/site";
 
 export function SitesPage() {
-  const { sites, fetchSites, createSite, deleteSite, startSite, stopSite, refreshStatus, enableSsl, disableSsl } = useSites();
+  const { sites, fetchSites, createSite, deleteSite, startSite, stopSite, refreshStatus, enableSsl, disableSsl, enableMailcatcher, disableMailcatcher } = useSites();
   const [modalOpen, setModalOpen] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [logsSite, setLogsSite] = useState<Site | null>(null);
@@ -66,6 +66,19 @@ export function SitesPage() {
     finally { setLoadingId(null); }
   }, [disableSsl]);
 
+  const handleEnableMail = useCallback(async (id: string) => {
+    setLoadingId(id);
+    try { await enableMailcatcher(id); }
+    catch (e: any) { alert(e?.message ?? "Erreur Mailcatcher"); }
+    finally { setLoadingId(null); }
+  }, [enableMailcatcher]);
+
+  const handleDisableMail = useCallback(async (id: string) => {
+    setLoadingId(id);
+    try { await disableMailcatcher(id); }
+    finally { setLoadingId(null); }
+  }, [disableMailcatcher]);
+
   return (
     <div className="p-6">
       {/* Header */}
@@ -121,6 +134,8 @@ export function SitesPage() {
               onLogs={() => setLogsSite(site)}
               onEnableSsl={() => handleEnableSsl(site.id)}
               onDisableSsl={() => handleDisableSsl(site.id)}
+              onEnableMail={() => handleEnableMail(site.id)}
+              onDisableMail={() => handleDisableMail(site.id)}
             />
           ))}
         </div>

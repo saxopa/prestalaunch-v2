@@ -20,6 +20,8 @@ interface Props {
   onLogs: () => void;
   onEnableSsl: () => void;
   onDisableSsl: () => void;
+  onEnableMail: () => void;
+  onDisableMail: () => void;
   loading?: boolean;
 }
 
@@ -140,6 +142,16 @@ export function SiteCard({ site, onStart, onStop, onDelete, onLogs, onEnableSsl,
                 <line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
               </svg>
             </Button>
+            {site.mail_port && (
+              <Button size="icon" variant="ghost" title="Mailcatcher (Mailpit)"
+                onClick={() => openUrl(`http://${site.domain}:${site.mail_port}`)}
+                className="text-blue-400 hover:text-blue-300">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                  <polyline points="22,6 12,13 2,6" />
+                </svg>
+              </Button>
+            )}
           </>
         )}
 

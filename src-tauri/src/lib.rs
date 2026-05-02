@@ -54,6 +54,8 @@ pub fn run() {
             commands::sites::create_template,
             commands::sites::delete_template,
             commands::sites::get_site_modules,
+            commands::sites::enable_mailcatcher,
+            commands::sites::disable_mailcatcher,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

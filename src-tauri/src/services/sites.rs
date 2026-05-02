@@ -12,15 +12,16 @@ pub async fn create_site_files(app_data_dir: &PathBuf, site: &Site) -> Result<()
         .await
         .map_err(|e| format!("create dir prestashop: {}", e))?;
 
-    let content = compose::generate_compose(
-        &site.id,
-        &site.domain,
-        &site.ps_version,
-        &site.mysql_version,
-        site.port,
-        site.pma_port,
-        None,
-    );
+    let content = compose::generate_compose(compose::ComposeConfig {
+        site_id: &site.id,
+        domain: &site.domain,
+        ps_version: &site.ps_version,
+        mysql_version: &site.mysql_version,
+        port: site.port,
+        pma_port: site.pma_port,
+        ssl_port: None,
+        mail_port: None,
+    });
     tokio::fs::write(dir.join("docker-compose.yml"), content)
         .await
         .map_err(|e| format!("write compose: {}", e))?;

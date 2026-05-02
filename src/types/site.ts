@@ -10,6 +10,7 @@ export interface Site {
   port: number;
   pma_port: number;
   ssl_port: number | null;
+  mail_port: number | null;
   status: SiteStatus;
   created_at: string;
 }

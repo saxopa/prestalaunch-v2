@@ -69,5 +69,21 @@ export function useSites() {
     [updateSite]
   );
 
-  return { sites, fetchSites, createSite, deleteSite, startSite, stopSite, refreshStatus, enableSsl, disableSsl };
+  const enableMailcatcher = useCallback(
+    async (siteId: string) => {
+      const site = await invoke<Site>("enable_mailcatcher", { siteId });
+      updateSite(siteId, { mail_port: site.mail_port });
+    },
+    [updateSite]
+  );
+
+  const disableMailcatcher = useCallback(
+    async (siteId: string) => {
+      await invoke("disable_mailcatcher", { siteId });
+      updateSite(siteId, { mail_port: null });
+    },
+    [updateSite]
+  );
+
+  return { sites, fetchSites, createSite, deleteSite, startSite, stopSite, refreshStatus, enableSsl, disableSsl, enableMailcatcher, disableMailcatcher };
 }

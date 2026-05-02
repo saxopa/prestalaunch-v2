@@ -6,6 +6,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/atoms/Button";
 import { StatusDot } from "@/components/atoms/StatusDot";
 import { useSites } from "@/hooks/useSites";
+import { useCallback } from "react";
 import { useSiteStore } from "@/stores/useSiteStore";
 import type { Site } from "@/types/site";
 
@@ -57,14 +58,17 @@ function logLineColor(line: string) {
 
 // ── tabs ────────────────────────────────────────────────────────���────────────
 
-function TabOverview({ site, onEnableSsl, onDisableSsl, loading }: {
+function TabOverview({ site, onEnableSsl, onDisableSsl, onEnableMail, onDisableMail, loading }: {
   site: Site;
   onEnableSsl: () => void;
   onDisableSsl: () => void;
+  onEnableMail: () => void;
+  onDisableMail: () => void;
   loading: boolean;
 }) {
   const isRunning = site.status === "running";
   const sslActive = site.ssl_port !== null;
+  const mailActive = site.mail_port !== null;
   const httpsUrl = sslActive ? `https://${site.domain}:${site.ssl_port}` : null;
   const httpUrl = `http://${site.domain}:${site.port}`;
 
@@ -92,6 +96,14 @@ function TabOverview({ site, onEnableSsl, onDisableSsl, loading }: {
             icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" /><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" /></svg>}
             disabled={!isRunning}
           />
+          {mailActive && (
+            <UrlCard
+              label="Mailcatcher"
+              url={`http://${site.domain}:${site.mail_port}`}
+              icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>}
+              disabled={!isRunning}
+            />
+          )}
         </div>
       </div>
 
@@ -129,14 +141,30 @@ function TabOverview({ site, onEnableSsl, onDisableSsl, loading }: {
                 : "Inactif — nécessite mkcert -install"}
             </p>
           </div>
-          <Button
-            size="sm"
-            variant={sslActive ? "secondary" : "primary"}
-            loading={loading}
-            disabled={!isRunning || loading}
-            onClick={sslActive ? onDisableSsl : onEnableSsl}
-          >
+          <Button size="sm" variant={sslActive ? "secondary" : "primary"}
+            loading={loading} disabled={!isRunning || loading}
+            onClick={sslActive ? onDisableSsl : onEnableSsl}>
             {sslActive ? "Désactiver" : "Activer"}
+          </Button>
+        </div>
+      </div>
+
+      {/* Mailcatcher */}
+      <div>
+        <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">Mailcatcher</h3>
+        <div className="flex items-center justify-between bg-surface-800 border border-surface-700 rounded-xl p-4">
+          <div>
+            <p className="text-sm font-medium text-white">Mailpit — intercepter les emails</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {mailActive
+                ? `Actif — http://${site.domain}:${site.mail_port} — PS SMTP configuré automatiquement`
+                : "Inactif — les emails passent par PHP mail()"}
+            </p>
+          </div>
+          <Button size="sm" variant={mailActive ? "secondary" : "primary"}
+            loading={loading} disabled={!isRunning || loading}
+            onClick={mailActive ? onDisableMail : onEnableMail}>
+            {mailActive ? "Désactiver" : "Activer"}
           </Button>
         </div>
       </div>
@@ -388,7 +416,7 @@ export function SiteDetailPage() {
   const { siteId } = useParams<{ siteId: string }>();
   const navigate = useNavigate();
   const site = useSiteStore((s) => s.sites.find((x) => x.id === siteId));
-  const { startSite, stopSite, enableSsl, disableSsl } = useSites();
+  const { startSite, stopSite, enableSsl, disableSsl, enableMailcatcher, disableMailcatcher } = useSites();
   const [tab, setTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(false);
 
@@ -416,6 +444,18 @@ export function SiteDetailPage() {
     setLoading(true);
     try { await disableSsl(site.id); } finally { setLoading(false); }
   };
+
+  const handleEnableMail = useCallback(async () => {
+    setLoading(true);
+    try { await enableMailcatcher(site.id); }
+    catch (e: any) { alert(e?.message ?? "Erreur Mailcatcher"); }
+    finally { setLoading(false); }
+  }, [site.id, enableMailcatcher]);
+
+  const handleDisableMail = useCallback(async () => {
+    setLoading(true);
+    try { await disableMailcatcher(site.id); } finally { setLoading(false); }
+  }, [site.id, disableMailcatcher]);
 
   return (
     <div className="flex flex-col h-full">
@@ -484,7 +524,9 @@ export function SiteDetailPage() {
       <div className="flex-1 overflow-y-auto p-6">
         {tab === "overview" && (
           <TabOverview site={site}
-            onEnableSsl={handleEnableSsl} onDisableSsl={handleDisableSsl} loading={loading} />
+            onEnableSsl={handleEnableSsl} onDisableSsl={handleDisableSsl}
+            onEnableMail={handleEnableMail} onDisableMail={handleDisableMail}
+            loading={loading} />
         )}
         {tab === "credentials" && <TabCredentials site={site} />}
         {tab === "logs" && <TabLogs site={site} />}

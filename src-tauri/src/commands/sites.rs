@@ -87,7 +87,7 @@ pub async fn create_site(
     pool: State<'_, SqlitePool>,
     data_dir: State<'_, AppDataDir>,
 ) -> Result<Site, String> {
-    let (port, pma_port, ssl_port) = compose::find_free_ports(&pool).await?;
+    let (port, pma_port, ssl_port, mail_port) = compose::find_free_ports(&pool).await?;
     let site = Site {
         id: Uuid::new_v4().to_string(),
         name: input.name,
@@ -98,6 +98,7 @@ pub async fn create_site(
         port,
         pma_port,
         ssl_port: Some(ssl_port),
+        mail_port: Some(mail_port),
         status: "stopped".to_string(),
         created_at: Utc::now().to_rfc3339(),
     };
@@ -111,8 +112,8 @@ pub async fn create_site(
         .map_err(|e| format!("files: {}", e))?;
 
     sqlx::query(
-        "INSERT INTO sites (id, name, domain, ps_version, php_version, mysql_version, port, pma_port, ssl_port, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO sites (id, name, domain, ps_version, php_version, mysql_version, port, pma_port, ssl_port, mail_port, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&site.id)
     .bind(&site.name)
@@ -123,6 +124,7 @@ pub async fn create_site(
     .bind(site.port)
     .bind(site.pma_port)
     .bind(site.ssl_port)
+    .bind(site.mail_port)
     .bind(&site.status)
     .bind(&site.created_at)
     .execute(&*pool)
@@ -376,7 +378,7 @@ pub async fn enable_ssl(
     let ssl_port = if let Some(p) = site.ssl_port {
         p
     } else {
-        let (_, _, p) = compose::find_free_ports(&pool).await?;
+        let (_, _, p, _) = compose::find_free_ports(&pool).await?;
         sqlx::query("UPDATE sites SET ssl_port = ? WHERE id = ?")
             .bind(p)
             .bind(&site_id)
@@ -419,10 +421,11 @@ pub async fn enable_ssl(
         .map_err(|e| e.to_string())?;
 
     // Réécrire docker-compose avec nginx
-    let compose_content = compose::generate_compose(
-        &site_id, &site.domain, &site.ps_version,
-        &site.mysql_version, site.port, site.pma_port, Some(ssl_port),
-    );
+    let compose_content = compose::generate_compose(compose::ComposeConfig {
+        site_id: &site_id, domain: &site.domain, ps_version: &site.ps_version,
+        mysql_version: &site.mysql_version, port: site.port, pma_port: site.pma_port,
+        ssl_port: Some(ssl_port), mail_port: site.mail_port,
+    });
     tokio::fs::write(dir.join("docker-compose.yml"), compose_content)
         .await
         .map_err(|e| e.to_string())?;
@@ -468,10 +471,11 @@ pub async fn disable_ssl(
     let dir = compose::site_dir(&data_dir.0, &site_id);
 
     // Réécrire docker-compose sans nginx (mais garder ssl_port alloué)
-    let compose_content = compose::generate_compose(
-        &site_id, &site.domain, &site.ps_version,
-        &site.mysql_version, site.port, site.pma_port, None,
-    );
+    let compose_content = compose::generate_compose(compose::ComposeConfig {
+        site_id: &site_id, domain: &site.domain, ps_version: &site.ps_version,
+        mysql_version: &site.mysql_version, port: site.port, pma_port: site.pma_port,
+        ssl_port: None, mail_port: site.mail_port,
+    });
     tokio::fs::write(dir.join("docker-compose.yml"), compose_content)
         .await
         .map_err(|e| e.to_string())?;
@@ -504,4 +508,96 @@ pub async fn disable_ssl(
         .map_err(|e| e.to_string())?;
 
     Ok(updated)
+}
+
+#[tauri::command]
+pub async fn enable_mailcatcher(
+    site_id: String,
+    pool: State<'_, SqlitePool>,
+    data_dir: State<'_, AppDataDir>,
+) -> Result<Site, String> {
+    let site = sqlx::query_as::<_, Site>("SELECT * FROM sites WHERE id = ?")
+        .bind(&site_id).fetch_one(&*pool).await.map_err(|e| e.to_string())?;
+
+    let mail_port = if let Some(p) = site.mail_port {
+        p
+    } else {
+        let (_, _, _, p) = compose::find_free_ports(&pool).await?;
+        sqlx::query("UPDATE sites SET mail_port = ? WHERE id = ?")
+            .bind(p).bind(&site_id).execute(&*pool).await.map_err(|e| e.to_string())?;
+        p
+    };
+
+    let dir = compose::site_dir(&data_dir.0, &site_id);
+    let compose_content = compose::generate_compose(compose::ComposeConfig {
+        site_id: &site_id, domain: &site.domain, ps_version: &site.ps_version,
+        mysql_version: &site.mysql_version, port: site.port, pma_port: site.pma_port,
+        ssl_port: site.ssl_port, mail_port: Some(mail_port),
+    });
+    tokio::fs::write(dir.join("docker-compose.yml"), compose_content)
+        .await.map_err(|e| e.to_string())?;
+
+    if site.status == "running" {
+        let _ = tokio::process::Command::new("docker")
+            .args(["compose", "up", "-d", "--no-recreate"])
+            .current_dir(&dir).output().await;
+
+        // Configurer PS SMTP → Mailpit
+        let container = format!("pl_{}_mysql", site_id);
+        let sql = "UPDATE ps_configuration SET value=CASE \
+            WHEN name='PS_MAIL_METHOD' THEN '2' \
+            WHEN name='PS_MAIL_SERVER' THEN 'mailpit' \
+            WHEN name='PS_MAIL_SMTP_PORT' THEN '1025' \
+            WHEN name='PS_MAIL_TYPE' THEN '0' \
+            WHEN name='PS_MAIL_USER' THEN '' \
+            WHEN name='PS_MAIL_PASSWD' THEN '' \
+            END WHERE name IN ('PS_MAIL_METHOD','PS_MAIL_SERVER','PS_MAIL_SMTP_PORT','PS_MAIL_TYPE','PS_MAIL_USER','PS_MAIL_PASSWD')";
+        let _ = tokio::process::Command::new("docker")
+            .args(["exec", &container, "mysql", "-uprestashop", "-pprestashop", "prestashop", "-e", sql])
+            .output().await;
+    }
+
+    sqlx::query("UPDATE sites SET mail_port = ? WHERE id = ?")
+        .bind(mail_port).bind(&site_id).execute(&*pool).await.map_err(|e| e.to_string())?;
+
+    sqlx::query_as::<_, Site>("SELECT * FROM sites WHERE id = ?")
+        .bind(&site_id).fetch_one(&*pool).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn disable_mailcatcher(
+    site_id: String,
+    pool: State<'_, SqlitePool>,
+    data_dir: State<'_, AppDataDir>,
+) -> Result<Site, String> {
+    let site = sqlx::query_as::<_, Site>("SELECT * FROM sites WHERE id = ?")
+        .bind(&site_id).fetch_one(&*pool).await.map_err(|e| e.to_string())?;
+
+    let dir = compose::site_dir(&data_dir.0, &site_id);
+    let compose_content = compose::generate_compose(compose::ComposeConfig {
+        site_id: &site_id, domain: &site.domain, ps_version: &site.ps_version,
+        mysql_version: &site.mysql_version, port: site.port, pma_port: site.pma_port,
+        ssl_port: site.ssl_port, mail_port: None,
+    });
+    tokio::fs::write(dir.join("docker-compose.yml"), compose_content)
+        .await.map_err(|e| e.to_string())?;
+
+    if site.status == "running" {
+        let _ = tokio::process::Command::new("docker")
+            .args(["compose", "stop", "mailpit"]).current_dir(&dir).output().await;
+        let _ = tokio::process::Command::new("docker")
+            .args(["compose", "rm", "-f", "mailpit"]).current_dir(&dir).output().await;
+
+        let container = format!("pl_{}_mysql", site_id);
+        let _ = tokio::process::Command::new("docker")
+            .args(["exec", &container, "mysql", "-uprestashop", "-pprestashop", "prestashop",
+                   "-e", "UPDATE ps_configuration SET value='1' WHERE name='PS_MAIL_METHOD'"])
+            .output().await;
+    }
+
+    sqlx::query("UPDATE sites SET mail_port = NULL WHERE id = ?")
+        .bind(&site_id).execute(&*pool).await.map_err(|e| e.to_string())?;
+
+    sqlx::query_as::<_, Site>("SELECT * FROM sites WHERE id = ?")
+        .bind(&site_id).fetch_one(&*pool).await.map_err(|e| e.to_string())
 }

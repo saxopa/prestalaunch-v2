@@ -6,21 +6,34 @@ pub fn site_dir(app_data_dir: &PathBuf, site_id: &str) -> PathBuf {
     app_data_dir.join("sites").join(site_id)
 }
 
-pub async fn find_free_ports(pool: &SqlitePool) -> Result<(i64, i64, i64), String> {
+pub struct ComposeConfig<'a> {
+    pub site_id: &'a str,
+    pub domain: &'a str,
+    pub ps_version: &'a str,
+    pub mysql_version: &'a str,
+    pub port: i64,
+    pub pma_port: i64,
+    pub ssl_port: Option<i64>,
+    pub mail_port: Option<i64>,
+}
+
+pub async fn find_free_ports(pool: &SqlitePool) -> Result<(i64, i64, i64, i64), String> {
     let used: Vec<i64> =
         sqlx::query_scalar(
             "SELECT port FROM sites \
              UNION SELECT pma_port FROM sites \
-             UNION SELECT ssl_port FROM sites WHERE ssl_port IS NOT NULL",
+             UNION SELECT ssl_port FROM sites WHERE ssl_port IS NOT NULL \
+             UNION SELECT mail_port FROM sites WHERE mail_port IS NOT NULL",
         )
         .fetch_all(pool)
         .await
         .map_err(|e| e.to_string())?;
 
-    let port = scan_port(8000, &used);
-    let pma_port = scan_port(9000, &used);
-    let ssl_port = scan_port(8400, &used);
-    Ok((port as i64, pma_port as i64, ssl_port as i64))
+    let port      = scan_port(8000, &used);
+    let pma_port  = scan_port(9000, &used);
+    let ssl_port  = scan_port(8400, &used);
+    let mail_port = scan_port(8500, &used);
+    Ok((port as i64, pma_port as i64, ssl_port as i64, mail_port as i64))
 }
 
 fn scan_port(start: u16, used: &[i64]) -> u16 {
@@ -32,16 +45,8 @@ fn scan_port(start: u16, used: &[i64]) -> u16 {
     start
 }
 
-pub fn generate_compose(
-    site_id: &str,
-    domain: &str,
-    ps_version: &str,
-    mysql_version: &str,
-    port: i64,
-    pma_port: i64,
-    ssl_port: Option<i64>,
-) -> String {
-    let nginx_service = ssl_port.map(|sp| format!(
+pub fn generate_compose(cfg: ComposeConfig) -> String {
+    let nginx_service = cfg.ssl_port.map(|sp| format!(
         r#"
   nginx:
     image: nginx:alpine
@@ -57,8 +62,21 @@ pub fn generate_compose(
     networks:
       - net
 "#,
-        site_id = site_id,
-        sp = sp,
+        site_id = cfg.site_id, sp = sp,
+    )).unwrap_or_default();
+
+    let mailpit_service = cfg.mail_port.map(|mp| format!(
+        r#"
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: pl_{site_id}_mailpit
+    restart: unless-stopped
+    ports:
+      - "{mp}:8025"
+    networks:
+      - net
+"#,
+        site_id = cfg.site_id, mp = mp,
     )).unwrap_or_default();
 
     format!(
@@ -115,18 +133,19 @@ pub fn generate_compose(
       PMA_PASSWORD: prestashop
     networks:
       - net
-{nginx_service}
+{nginx_service}{mailpit_service}
 networks:
   net:
     driver: bridge
 "#,
-        site_id = site_id,
-        domain = domain,
-        ps_version = ps_version,
-        mysql_version = mysql_version,
-        port = port,
-        pma_port = pma_port,
+        site_id = cfg.site_id,
+        domain = cfg.domain,
+        ps_version = cfg.ps_version,
+        mysql_version = cfg.mysql_version,
+        port = cfg.port,
+        pma_port = cfg.pma_port,
         nginx_service = nginx_service,
+        mailpit_service = mailpit_service,
     )
 }
 

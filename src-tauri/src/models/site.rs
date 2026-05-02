@@ -11,6 +11,7 @@ pub struct Site {
     pub port: i64,
     pub pma_port: i64,
     pub ssl_port: Option<i64>,
+    pub mail_port: Option<i64>,
     pub status: String,
     pub created_at: String,
 }
