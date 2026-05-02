@@ -169,3 +169,36 @@ pub async fn get_site_status(
 
     Ok(status)
 }
+
+#[tauri::command]
+pub async fn open_site_folder(
+    site_id: String,
+    app: String,
+    data_dir: State<'_, AppDataDir>,
+) -> Result<(), String> {
+    let path = compose::site_dir(&data_dir.0, &site_id).join("prestashop");
+
+    match app.as_str() {
+        "finder" => {
+            std::process::Command::new("open")
+                .arg(&path)
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+        "vscode" => {
+            std::process::Command::new("code")
+                .arg(&path)
+                .spawn()
+                .map_err(|e| format!("VS Code introuvable (installez la commande 'code' depuis VS Code → Shell Command): {}", e))?;
+        }
+        "terminal" => {
+            std::process::Command::new("open")
+                .args(["-a", "Terminal", path.to_str().unwrap_or("")])
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+        _ => return Err(format!("App inconnue: {}", app)),
+    }
+
+    Ok(())
+}

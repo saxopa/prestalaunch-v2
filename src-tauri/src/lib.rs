@@ -41,6 +41,7 @@ pub fn run() {
             commands::sites::start_site,
             commands::sites::stop_site,
             commands::sites::get_site_status,
+            commands::sites::open_site_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
