@@ -50,6 +50,8 @@ pub fn run() {
             commands::sites::stop_site_logs,
             commands::sites::enable_ssl,
             commands::sites::disable_ssl,
+            commands::sites::create_template,
+            commands::sites::delete_template,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

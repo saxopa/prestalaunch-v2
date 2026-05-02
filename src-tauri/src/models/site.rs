@@ -32,4 +32,5 @@ pub struct SiteTemplate {
     pub php_version: String,
     pub mysql_version: String,
     pub is_default: i64,
+    pub user_created: i64,
 }

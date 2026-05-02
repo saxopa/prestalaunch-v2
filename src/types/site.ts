@@ -20,7 +20,8 @@ export interface SiteTemplate {
   ps_version: string;
   php_version: string;
   mysql_version: string;
-  is_default: boolean;
+  is_default: number;
+  user_created: number;
 }
 
 export interface CreateSiteInput {

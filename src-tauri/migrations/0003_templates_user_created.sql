@@ -1,0 +1,1 @@
+ALTER TABLE templates ADD COLUMN user_created INTEGER NOT NULL DEFAULT 0;

@@ -17,11 +17,68 @@ pub async fn list_sites(pool: State<'_, SqlitePool>) -> Result<Vec<Site>, String
 #[tauri::command]
 pub async fn list_templates(pool: State<'_, SqlitePool>) -> Result<Vec<SiteTemplate>, String> {
     sqlx::query_as::<_, SiteTemplate>(
-        "SELECT * FROM templates ORDER BY is_default DESC, name ASC",
+        "SELECT * FROM templates ORDER BY is_default DESC, user_created ASC, name ASC",
     )
     .fetch_all(&*pool)
     .await
     .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn create_template(
+    name: String,
+    ps_version: String,
+    php_version: String,
+    mysql_version: String,
+    pool: State<'_, SqlitePool>,
+) -> Result<SiteTemplate, String> {
+    let tpl = SiteTemplate {
+        id: Uuid::new_v4().to_string(),
+        name,
+        ps_version,
+        php_version,
+        mysql_version,
+        is_default: 0,
+        user_created: 1,
+    };
+    sqlx::query(
+        "INSERT INTO templates (id, name, ps_version, php_version, mysql_version, is_default, user_created)
+         VALUES (?, ?, ?, ?, ?, 0, 1)",
+    )
+    .bind(&tpl.id)
+    .bind(&tpl.name)
+    .bind(&tpl.ps_version)
+    .bind(&tpl.php_version)
+    .bind(&tpl.mysql_version)
+    .execute(&*pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(tpl)
+}
+
+#[tauri::command]
+pub async fn delete_template(
+    template_id: String,
+    pool: State<'_, SqlitePool>,
+) -> Result<(), String> {
+    let user_created: i64 =
+        sqlx::query_scalar("SELECT user_created FROM templates WHERE id = ?")
+            .bind(&template_id)
+            .fetch_optional(&*pool)
+            .await
+            .map_err(|e| e.to_string())?
+            .unwrap_or(0);
+
+    if user_created == 0 {
+        return Err("Les templates prédéfinis ne peuvent pas être supprimés.".to_string());
+    }
+
+    sqlx::query("DELETE FROM templates WHERE id = ?")
+        .bind(&template_id)
+        .execute(&*pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
