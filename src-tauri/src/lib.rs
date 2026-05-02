@@ -27,6 +27,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::app::get_onboarding_done,
             commands::app::set_onboarding_done,
+            commands::engine::check_docker,
+            commands::engine::start_docker,
+            commands::engine::install_docker,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

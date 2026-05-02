@@ -1,6 +1,12 @@
 import { create } from "zustand";
 
-type DockerStatus = "unknown" | "checking" | "installing" | "ready" | "error";
+export type DockerStatus =
+  | "unknown"
+  | "checking"
+  | "not_installed"
+  | "installing"
+  | "ready"
+  | "error";
 
 interface AppStore {
   onboardingDone: boolean;
