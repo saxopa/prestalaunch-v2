@@ -48,6 +48,8 @@ pub fn run() {
             commands::sites::open_site_folder,
             commands::sites::stream_site_logs,
             commands::sites::stop_site_logs,
+            commands::sites::enable_ssl,
+            commands::sites::disable_ssl,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

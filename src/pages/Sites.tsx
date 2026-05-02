@@ -7,7 +7,7 @@ import { useSites } from "@/hooks/useSites";
 import type { CreateSiteInput, Site } from "@/types/site";
 
 export function SitesPage() {
-  const { sites, fetchSites, createSite, deleteSite, startSite, stopSite, refreshStatus } = useSites();
+  const { sites, fetchSites, createSite, deleteSite, startSite, stopSite, refreshStatus, enableSsl, disableSsl } = useSites();
   const [modalOpen, setModalOpen] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [logsSite, setLogsSite] = useState<Site | null>(null);
@@ -52,6 +52,19 @@ export function SitesPage() {
     try { await deleteSite(id); }
     finally { setLoadingId(null); }
   }, [deleteSite]);
+
+  const handleEnableSsl = useCallback(async (id: string) => {
+    setLoadingId(id);
+    try { await enableSsl(id); }
+    catch (e: any) { alert(e?.message ?? "Erreur SSL"); }
+    finally { setLoadingId(null); }
+  }, [enableSsl]);
+
+  const handleDisableSsl = useCallback(async (id: string) => {
+    setLoadingId(id);
+    try { await disableSsl(id); }
+    finally { setLoadingId(null); }
+  }, [disableSsl]);
 
   return (
     <div className="p-6">
@@ -106,6 +119,8 @@ export function SitesPage() {
               onStop={() => handleStop(site.id)}
               onDelete={() => handleDelete(site.id)}
               onLogs={() => setLogsSite(site)}
+              onEnableSsl={() => handleEnableSsl(site.id)}
+              onDisableSsl={() => handleDisableSsl(site.id)}
             />
           ))}
         </div>

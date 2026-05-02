@@ -30,7 +30,7 @@ pub async fn create_site(
     pool: State<'_, SqlitePool>,
     data_dir: State<'_, AppDataDir>,
 ) -> Result<Site, String> {
-    let (port, pma_port) = compose::find_free_ports(&pool).await?;
+    let (port, pma_port, ssl_port) = compose::find_free_ports(&pool).await?;
     let site = Site {
         id: Uuid::new_v4().to_string(),
         name: input.name,
@@ -40,6 +40,7 @@ pub async fn create_site(
         mysql_version: input.mysql_version,
         port,
         pma_port,
+        ssl_port: Some(ssl_port),
         status: "stopped".to_string(),
         created_at: Utc::now().to_rfc3339(),
     };
@@ -53,8 +54,8 @@ pub async fn create_site(
         .map_err(|e| format!("files: {}", e))?;
 
     sqlx::query(
-        "INSERT INTO sites (id, name, domain, ps_version, php_version, mysql_version, port, pma_port, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO sites (id, name, domain, ps_version, php_version, mysql_version, port, pma_port, ssl_port, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&site.id)
     .bind(&site.name)
@@ -64,6 +65,7 @@ pub async fn create_site(
     .bind(&site.mysql_version)
     .bind(site.port)
     .bind(site.pma_port)
+    .bind(site.ssl_port)
     .bind(&site.status)
     .bind(&site.created_at)
     .execute(&*pool)
@@ -262,4 +264,154 @@ pub async fn stop_site_logs(
             .output();
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn enable_ssl(
+    site_id: String,
+    pool: State<'_, SqlitePool>,
+    data_dir: State<'_, AppDataDir>,
+) -> Result<Site, String> {
+    // Vérifier mkcert installé
+    let mkcert_path = which::which("mkcert")
+        .map_err(|_| "mkcert introuvable. Installez-le : brew install mkcert && mkcert -install".to_string())?;
+
+    let site = sqlx::query_as::<_, Site>("SELECT * FROM sites WHERE id = ?")
+        .bind(&site_id)
+        .fetch_one(&*pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Allouer ssl_port si pas encore fait (sites existants avant migration)
+    let ssl_port = if let Some(p) = site.ssl_port {
+        p
+    } else {
+        let (_, _, p) = compose::find_free_ports(&pool).await?;
+        sqlx::query("UPDATE sites SET ssl_port = ? WHERE id = ?")
+            .bind(p)
+            .bind(&site_id)
+            .execute(&*pool)
+            .await
+            .map_err(|e| e.to_string())?;
+        p
+    };
+
+    let dir = compose::site_dir(&data_dir.0, &site_id);
+    let certs_dir = dir.join("certs");
+    tokio::fs::create_dir_all(&certs_dir)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Générer certificat
+    let cert_path = certs_dir.join("cert.pem");
+    let key_path = certs_dir.join("key.pem");
+    let output = tokio::process::Command::new(&mkcert_path)
+        .args([
+            "-cert-file", cert_path.to_str().unwrap(),
+            "-key-file",  key_path.to_str().unwrap(),
+            &site.domain,
+        ])
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "mkcert échoué: {}. Avez-vous exécuté `mkcert -install` ?",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    // Écrire nginx.conf
+    let nginx_conf = compose::generate_nginx_conf(&site.domain);
+    tokio::fs::write(dir.join("nginx.conf"), nginx_conf)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Réécrire docker-compose avec nginx
+    let compose_content = compose::generate_compose(
+        &site_id, &site.domain, &site.ps_version,
+        &site.mysql_version, site.port, site.pma_port, Some(ssl_port),
+    );
+    tokio::fs::write(dir.join("docker-compose.yml"), compose_content)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Marquer SSL actif (ssl_port != NULL = SSL activé)
+    sqlx::query("UPDATE sites SET ssl_port = ? WHERE id = ?")
+        .bind(ssl_port)
+        .bind(&site_id)
+        .execute(&*pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Appliquer si le site tourne
+    if site.status == "running" {
+        let _ = tokio::process::Command::new("docker")
+            .args(["compose", "up", "-d", "--no-recreate"])
+            .current_dir(&dir)
+            .output()
+            .await;
+    }
+
+    let updated = sqlx::query_as::<_, Site>("SELECT * FROM sites WHERE id = ?")
+        .bind(&site_id)
+        .fetch_one(&*pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(updated)
+}
+
+#[tauri::command]
+pub async fn disable_ssl(
+    site_id: String,
+    pool: State<'_, SqlitePool>,
+    data_dir: State<'_, AppDataDir>,
+) -> Result<Site, String> {
+    let site = sqlx::query_as::<_, Site>("SELECT * FROM sites WHERE id = ?")
+        .bind(&site_id)
+        .fetch_one(&*pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let dir = compose::site_dir(&data_dir.0, &site_id);
+
+    // Réécrire docker-compose sans nginx (mais garder ssl_port alloué)
+    let compose_content = compose::generate_compose(
+        &site_id, &site.domain, &site.ps_version,
+        &site.mysql_version, site.port, site.pma_port, None,
+    );
+    tokio::fs::write(dir.join("docker-compose.yml"), compose_content)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Stopper le container nginx
+    if site.status == "running" {
+        let _ = tokio::process::Command::new("docker")
+            .args(["compose", "stop", "nginx"])
+            .current_dir(&dir)
+            .output()
+            .await;
+        let _ = tokio::process::Command::new("docker")
+            .args(["compose", "rm", "-f", "nginx"])
+            .current_dir(&dir)
+            .output()
+            .await;
+    }
+
+    // Marquer SSL inactif en mettant ssl_port à NULL
+    sqlx::query("UPDATE sites SET ssl_port = NULL WHERE id = ?")
+        .bind(&site_id)
+        .execute(&*pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let updated = sqlx::query_as::<_, Site>("SELECT * FROM sites WHERE id = ?")
+        .bind(&site_id)
+        .fetch_one(&*pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(updated)
 }

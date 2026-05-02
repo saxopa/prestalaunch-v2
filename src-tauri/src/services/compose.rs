@@ -6,16 +6,21 @@ pub fn site_dir(app_data_dir: &PathBuf, site_id: &str) -> PathBuf {
     app_data_dir.join("sites").join(site_id)
 }
 
-pub async fn find_free_ports(pool: &SqlitePool) -> Result<(i64, i64), String> {
+pub async fn find_free_ports(pool: &SqlitePool) -> Result<(i64, i64, i64), String> {
     let used: Vec<i64> =
-        sqlx::query_scalar("SELECT port FROM sites UNION SELECT pma_port FROM sites")
-            .fetch_all(pool)
-            .await
-            .map_err(|e| e.to_string())?;
+        sqlx::query_scalar(
+            "SELECT port FROM sites \
+             UNION SELECT pma_port FROM sites \
+             UNION SELECT ssl_port FROM sites WHERE ssl_port IS NOT NULL",
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let port = scan_port(8000, &used);
     let pma_port = scan_port(9000, &used);
-    Ok((port as i64, pma_port as i64))
+    let ssl_port = scan_port(8400, &used);
+    Ok((port as i64, pma_port as i64, ssl_port as i64))
 }
 
 fn scan_port(start: u16, used: &[i64]) -> u16 {
@@ -34,7 +39,28 @@ pub fn generate_compose(
     mysql_version: &str,
     port: i64,
     pma_port: i64,
+    ssl_port: Option<i64>,
 ) -> String {
+    let nginx_service = ssl_port.map(|sp| format!(
+        r#"
+  nginx:
+    image: nginx:alpine
+    container_name: pl_{site_id}_nginx
+    restart: unless-stopped
+    depends_on:
+      - prestashop
+    ports:
+      - "{sp}:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/certs:ro
+    networks:
+      - net
+"#,
+        site_id = site_id,
+        sp = sp,
+    )).unwrap_or_default();
+
     format!(
         r#"services:
   mysql:
@@ -89,7 +115,7 @@ pub fn generate_compose(
       PMA_PASSWORD: prestashop
     networks:
       - net
-
+{nginx_service}
 networks:
   net:
     driver: bridge
@@ -100,5 +126,31 @@ networks:
         mysql_version = mysql_version,
         port = port,
         pma_port = pma_port,
+        nginx_service = nginx_service,
+    )
+}
+
+pub fn generate_nginx_conf(domain: &str) -> String {
+    format!(
+        r#"events {{}}
+http {{
+    server {{
+        listen 443 ssl;
+        server_name {domain};
+
+        ssl_certificate /certs/cert.pem;
+        ssl_certificate_key /certs/key.pem;
+
+        location / {{
+            proxy_pass http://prestashop:80;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+        }}
+    }}
+}}
+"#,
+        domain = domain,
     )
 }

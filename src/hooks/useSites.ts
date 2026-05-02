@@ -53,5 +53,21 @@ export function useSites() {
     [updateSite]
   );
 
-  return { sites, fetchSites, createSite, deleteSite, startSite, stopSite, refreshStatus };
+  const enableSsl = useCallback(
+    async (siteId: string) => {
+      const site = await invoke<Site>("enable_ssl", { siteId });
+      updateSite(siteId, { ssl_port: site.ssl_port });
+    },
+    [updateSite]
+  );
+
+  const disableSsl = useCallback(
+    async (siteId: string) => {
+      await invoke("disable_ssl", { siteId });
+      updateSite(siteId, { ssl_port: null });
+    },
+    [updateSite]
+  );
+
+  return { sites, fetchSites, createSite, deleteSite, startSite, stopSite, refreshStatus, enableSsl, disableSsl };
 }
