@@ -26,9 +26,13 @@ pub async fn check_ssl_ca() -> Result<bool, String> {
 #[tauri::command]
 pub async fn install_ssl_ca() -> Result<(), String> {
     // Installe Homebrew si absent
+    // Note: bash -c "$(curl ...)" ne fonctionne pas depuis Rust (substitution mal interprétée)
+    // → téléchargement dans /tmp puis exécution directe
     if which::which("brew").is_err() {
         let out = tokio::process::Command::new("/bin/bash")
-            .args(["-c", "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"])
+            .args(["-c",
+                "curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh \
+                 -o /tmp/brew_install.sh && NONINTERACTIVE=1 /bin/bash /tmp/brew_install.sh"])
             .output()
             .await
             .map_err(|e| format!("Installation Homebrew : {e}"))?;
@@ -64,21 +68,45 @@ pub async fn install_ssl_ca() -> Result<(), String> {
         }
     }
 
-    let mkcert = which::which("mkcert")
-        .map_err(|_| "mkcert introuvable après installation".to_string())?;
+    // Installe la CA dans le trousseau système
+    // mkcert -install appelle `sudo security add-trusted-cert` en interne → besoin d'un dialog admin.
+    // osascript "with administrator privileges" affiche le dialog macOS natif et exécute avec sudo.
+    #[cfg(target_os = "macos")]
+    {
+        let mkcert = which::which("mkcert")
+            .map_err(|_| "mkcert introuvable après installation".to_string())?;
+        let mkcert_str = mkcert.to_string_lossy().replace('"', "\\\"");
+        let script = format!(
+            "do shell script \"{mkcert_str} -install\" with administrator privileges"
+        );
+        let out = tokio::process::Command::new("osascript")
+            .args(["-e", &script])
+            .output()
+            .await
+            .map_err(|e| format!("osascript : {e}"))?;
+        if !out.status.success() {
+            return Err(format!(
+                "Installation CA échouée : {}",
+                String::from_utf8_lossy(&out.stderr)
+            ));
+        }
+    }
 
-    // Installe la CA dans le trousseau (demande le mot de passe admin via dialog macOS)
-    let out = tokio::process::Command::new(&mkcert)
-        .arg("-install")
-        .output()
-        .await
-        .map_err(|e| format!("mkcert -install : {e}"))?;
-
-    if !out.status.success() {
-        return Err(format!(
-            "Installation CA échouée : {}",
-            String::from_utf8_lossy(&out.stderr)
-        ));
+    #[cfg(not(target_os = "macos"))]
+    {
+        let mkcert = which::which("mkcert")
+            .map_err(|_| "mkcert introuvable après installation".to_string())?;
+        let out = tokio::process::Command::new(&mkcert)
+            .arg("-install")
+            .output()
+            .await
+            .map_err(|e| format!("mkcert -install : {e}"))?;
+        if !out.status.success() {
+            return Err(format!(
+                "Installation CA échouée : {}",
+                String::from_utf8_lossy(&out.stderr)
+            ));
+        }
     }
 
     Ok(())
