@@ -321,8 +321,9 @@ pub async fn get_site_status(
             .await
             .map_err(|e| e.to_string())?;
 
-    if current.as_deref() == Some("initializing") {
-        return Ok("initializing".to_string());
+    // Ne pas écraser "starting" (pull images en cours) ni "initializing" (PS pas encore prêt)
+    if matches!(current.as_deref(), Some("starting") | Some("initializing")) {
+        return Ok(current.unwrap());
     }
 
     let status = site_svc::get_container_status(&site_id).await;

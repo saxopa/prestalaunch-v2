@@ -94,10 +94,12 @@ export function SiteCard({ site, onStart, onStop, onDelete, onLogs, onEnableSsl,
         )}
       </div>
 
-      {/* Message initializing */}
-      {isInitializing && (
+      {/* Message starting / initializing */}
+      {(isStarting || isInitializing) && (
         <p className="text-xs text-warning/80 bg-warning/5 border border-warning/20 rounded-lg px-3 py-2">
-          Le site peut prendre 3 à 5 minutes à démarrer lors du premier lancement…
+          {isStarting
+            ? "Téléchargement des images Docker… Cela peut prendre plusieurs minutes au premier lancement."
+            : "PrestaShop démarre… Le site sera accessible dans 3 à 5 minutes."}
         </p>
       )}
 
