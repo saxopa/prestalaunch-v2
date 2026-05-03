@@ -101,22 +101,22 @@ export function SiteCard({ site, onStart, onStop, onDelete, onLogs, onEnableSsl,
         </p>
       )}
 
-      {/* Actions — rangée 1 : démarrer/arrêter + icônes site */}
-      <div className="flex items-center gap-2 pt-1 border-t border-surface-800">
+      {/* Actions */}
+      <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-surface-800">
+        {/* Start / Stop */}
         {isRunning ? (
-          <Button size="sm" variant="secondary" disabled={!canToggle} loading={loading} onClick={onStop}
-            className="flex-1">
+          <Button size="sm" variant="secondary" disabled={!canToggle} loading={loading} onClick={onStop}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
             Arrêter
           </Button>
         ) : (
-          <Button size="sm" variant="primary" disabled={!canToggle} loading={loading || isStarting || isInitializing} onClick={onStart}
-            className="flex-1">
+          <Button size="sm" variant="primary" disabled={!canToggle} loading={loading || isStarting || isInitializing} onClick={onStart}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
             {isInitializing ? "Chargement…" : "Démarrer"}
           </Button>
         )}
 
+        {/* Icônes site (running uniquement) */}
         {isRunning && (
           <>
             <Button size="icon" variant="ghost"
@@ -156,36 +156,37 @@ export function SiteCard({ site, onStart, onStop, onDelete, onLogs, onEnableSsl,
             )}
           </>
         )}
-      </div>
 
-      {/* Actions — rangée 2 : outils fichiers + supprimer */}
-      <div className="flex items-center gap-1">
-        <Button size="icon" variant="ghost" title="Ouvrir dans Finder"
-          onClick={() => invoke("open_site_folder", { siteId: site.id, app: "finder" })}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-          </svg>
-        </Button>
-        <Button size="icon" variant="ghost" title="Ouvrir dans VS Code"
-          onClick={() => invoke("open_site_folder", { siteId: site.id, app: "vscode" })}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
-          </svg>
-        </Button>
-        <Button size="icon" variant="ghost" title="Ouvrir dans Terminal"
-          onClick={() => invoke("open_site_folder", { siteId: site.id, app: "terminal" })}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
-          </svg>
-        </Button>
+        {/* Séparateur + outils fichiers */}
         <div className="flex-1" />
-        <Button size="icon" variant="ghost" title="Supprimer" onClick={onDelete}
-          className="text-danger/70 hover:text-danger hover:bg-danger/10">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" />
-            <path d="M10 11v6M14 11v6M9 6V4h6v2" />
-          </svg>
-        </Button>
+        <div className="flex items-center gap-0.5">
+          <Button size="icon" variant="ghost" title="Ouvrir dans Finder"
+            onClick={() => invoke("open_site_folder", { siteId: site.id, app: "finder" })}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+          </Button>
+          <Button size="icon" variant="ghost" title="Ouvrir dans VS Code"
+            onClick={() => invoke("open_site_folder", { siteId: site.id, app: "vscode" })}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
+            </svg>
+          </Button>
+          <Button size="icon" variant="ghost" title="Ouvrir dans Terminal"
+            onClick={() => invoke("open_site_folder", { siteId: site.id, app: "terminal" })}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
+            </svg>
+          </Button>
+          <div className="w-px h-4 bg-surface-700 mx-0.5" />
+          <Button size="icon" variant="ghost" title="Supprimer" onClick={onDelete}
+            className="text-danger/70 hover:text-danger hover:bg-danger/10">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" />
+              <path d="M10 11v6M14 11v6M9 6V4h6v2" />
+            </svg>
+          </Button>
+        </div>
       </div>
     </div>
   );
