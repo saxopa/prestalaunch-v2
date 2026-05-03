@@ -6,6 +6,34 @@ use sqlx::SqlitePool;
 use tauri::{Emitter, State, Window};
 use uuid::Uuid;
 
+async fn update_prestashop_ssl_config(site_id: &str, domain: &str, ssl_port: Option<i64>, http_port: i64) {
+    let mysql_container = format!("pl_{site_id}_mysql");
+    let ps_container = format!("pl_{site_id}_ps");
+
+    let (domain_val, ssl_enabled) = if let Some(port) = ssl_port {
+        (format!("{domain}:{port}"), "1")
+    } else {
+        (format!("{domain}:{http_port}"), "0")
+    };
+
+    let sql = format!(
+        "UPDATE ps_configuration SET value = '{domain_val}' WHERE name IN ('PS_SHOP_DOMAIN', 'PS_SHOP_DOMAIN_SSL'); \
+         UPDATE ps_configuration SET value = '{ssl_enabled}' WHERE name IN ('PS_SSL_ENABLED', 'PS_SSL_ENABLED_EVERYWHERE');"
+    );
+
+    let _ = tokio::process::Command::new("docker")
+        .args(["exec", &mysql_container, "mysql", "-uprestashop", "-pprestashop", "prestashop", "-e", &sql])
+        .output()
+        .await;
+
+    let _ = tokio::process::Command::new("docker")
+        .args(["exec", &ps_container, "rm", "-rf",
+               "/var/www/html/var/cache/prod",
+               "/var/www/html/var/cache/dev"])
+        .output()
+        .await;
+}
+
 async fn ensure_mkcert() -> Result<std::path::PathBuf, String> {
     if let Ok(path) = which::which("mkcert") {
         return Ok(path);
@@ -551,6 +579,7 @@ pub async fn enable_ssl(
             .output()
             .await;
 
+        update_prestashop_ssl_config(&site_id, &site.domain, Some(ssl_port), site.port).await;
     }
 
     let updated = sqlx::query_as::<_, Site>("SELECT * FROM sites WHERE id = ?")
@@ -598,6 +627,8 @@ pub async fn disable_ssl(
             .current_dir(&dir)
             .output()
             .await;
+
+        update_prestashop_ssl_config(&site_id, &site.domain, None, site.port).await;
     }
 
     // Marquer SSL inactif en mettant ssl_port à NULL
