@@ -1,4 +1,4 @@
-export type SiteStatus = "running" | "stopped" | "starting" | "error";
+export type SiteStatus = "running" | "stopped" | "starting" | "initializing" | "error";
 
 export interface Site {
   id: string;

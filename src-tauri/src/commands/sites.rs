@@ -229,11 +229,64 @@ pub async fn start_site(
             e
         })?;
 
-    sqlx::query("UPDATE sites SET status = 'running' WHERE id = ?")
+    // Conteneurs up mais PS pas encore prêt — passer en "initializing"
+    let site: Site = sqlx::query_as("SELECT * FROM sites WHERE id = ?")
+        .bind(&site_id)
+        .fetch_one(&*pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    sqlx::query("UPDATE sites SET status = 'initializing' WHERE id = ?")
         .bind(&site_id)
         .execute(&*pool)
         .await
         .map_err(|e| e.to_string())?;
+
+    // Poller HTTP en arrière-plan jusqu'à ce que PS réponde
+    {
+        let pool_bg = pool.inner().clone();
+        let id = site_id.clone();
+        let url = format!("http://{}:{}", site.domain, site.port);
+        tokio::spawn(async move {
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(10))
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .unwrap_or_default();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                if std::time::Instant::now() > deadline {
+                    let _ = sqlx::query("UPDATE sites SET status = 'error' WHERE id = ?")
+                        .bind(&id)
+                        .execute(&pool_bg)
+                        .await;
+                    break;
+                }
+                // Vérifier que le site n'a pas été arrêté entre-temps
+                let current: Option<String> =
+                    sqlx::query_scalar("SELECT status FROM sites WHERE id = ?")
+                        .bind(&id)
+                        .fetch_optional(&pool_bg)
+                        .await
+                        .ok()
+                        .flatten();
+                if current.as_deref() != Some("initializing") {
+                    break;
+                }
+                if let Ok(resp) = client.get(&url).send().await {
+                    let s = resp.status().as_u16();
+                    if s == 200 || s == 301 || s == 302 || s == 404 {
+                        let _ = sqlx::query("UPDATE sites SET status = 'running' WHERE id = ?")
+                            .bind(&id)
+                            .execute(&pool_bg)
+                            .await;
+                        break;
+                    }
+                }
+            }
+        });
+    }
 
     Ok(())
 }
@@ -260,6 +313,18 @@ pub async fn get_site_status(
     site_id: String,
     pool: State<'_, SqlitePool>,
 ) -> Result<String, String> {
+    // Ne pas écraser "initializing" — le poller background gère la transition
+    let current: Option<String> =
+        sqlx::query_scalar("SELECT status FROM sites WHERE id = ?")
+            .bind(&site_id)
+            .fetch_optional(&*pool)
+            .await
+            .map_err(|e| e.to_string())?;
+
+    if current.as_deref() == Some("initializing") {
+        return Ok("initializing".to_string());
+    }
+
     let status = site_svc::get_container_status(&site_id).await;
 
     sqlx::query("UPDATE sites SET status = ? WHERE id = ?")

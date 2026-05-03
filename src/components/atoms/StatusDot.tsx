@@ -9,6 +9,7 @@ const colorMap: Record<SiteStatus, string> = {
   running: "bg-success animate-pulse",
   stopped: "bg-slate-600",
   starting: "bg-warning animate-pulse",
+  initializing: "bg-warning animate-pulse",
   error: "bg-danger",
 };
 

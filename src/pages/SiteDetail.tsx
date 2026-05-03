@@ -409,7 +409,7 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 const STATUS_LABEL: Record<Site["status"], string> = {
-  running: "Actif", stopped: "Arrêté", starting: "Démarrage…", error: "Erreur",
+  running: "Actif", stopped: "Arrêté", starting: "Démarrage…", initializing: "Chargement…", error: "Erreur",
 };
 
 export function SiteDetailPage() {

@@ -9,6 +9,7 @@ const STATUS_LABEL: Record<Site["status"], string> = {
   running: "Actif",
   stopped: "Arrêté",
   starting: "Démarrage…",
+  initializing: "Chargement…",
   error: "Erreur",
 };
 
@@ -29,7 +30,8 @@ export function SiteCard({ site, onStart, onStop, onDelete, onLogs, onEnableSsl,
   const navigate = useNavigate();
   const isRunning = site.status === "running";
   const isStarting = site.status === "starting";
-  const canToggle = !loading && site.status !== "starting";
+  const isInitializing = site.status === "initializing";
+  const canToggle = !loading && site.status !== "starting" && site.status !== "initializing";
   const sslActive = site.ssl_port !== null;
   const httpsUrl = sslActive ? `https://${site.domain}:${site.ssl_port}` : null;
   const httpUrl = `http://${site.domain}:${site.port}`;
@@ -68,7 +70,7 @@ export function SiteCard({ site, onStart, onStop, onDelete, onLogs, onEnableSsl,
           )}
         </div>
         <span className={`text-xs font-medium flex-shrink-0 ${
-          isRunning ? "text-success" : isStarting ? "text-warning" : "text-slate-500"
+          isRunning ? "text-success" : (isStarting || isInitializing) ? "text-warning" : "text-slate-500"
         }`}>
           {STATUS_LABEL[site.status]}
         </span>
@@ -101,10 +103,10 @@ export function SiteCard({ site, onStart, onStop, onDelete, onLogs, onEnableSsl,
             Arrêter
           </Button>
         ) : (
-          <Button size="sm" variant="primary" disabled={!canToggle} loading={loading || isStarting} onClick={onStart}
+          <Button size="sm" variant="primary" disabled={!canToggle} loading={loading || isStarting || isInitializing} onClick={onStart}
             className="flex-1">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
-            Démarrer
+            {isInitializing ? "Chargement…" : "Démarrer"}
           </Button>
         )}
 
