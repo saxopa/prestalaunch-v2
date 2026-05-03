@@ -80,7 +80,7 @@ export function SettingsPage() {
           {(caStatus === "not_installed" || caStatus === "error") && (
             <div className="space-y-3">
               <p className="text-xs text-slate-400">
-                Le certificat de sécurité local n'est pas encore installé. Votre mot de passe administrateur sera demandé une seule fois.
+                Le certificat de sécurité local n'est pas encore installé. PrestaLaunch installera automatiquement Homebrew et mkcert si nécessaire. Votre mot de passe administrateur sera demandé.
               </p>
               {caStatus === "error" && caError && (
                 <p className="text-xs text-danger bg-danger/10 border border-danger/20 rounded px-3 py-2">{caError}</p>

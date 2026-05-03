@@ -25,10 +25,30 @@ pub async fn check_ssl_ca() -> Result<bool, String> {
 
 #[tauri::command]
 pub async fn install_ssl_ca() -> Result<(), String> {
+    // Installe Homebrew si absent
+    if which::which("brew").is_err() {
+        let out = tokio::process::Command::new("/bin/bash")
+            .args(["-c", "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"])
+            .output()
+            .await
+            .map_err(|e| format!("Installation Homebrew : {e}"))?;
+
+        if !out.status.success() {
+            return Err(format!(
+                "Installation Homebrew échouée : {}",
+                String::from_utf8_lossy(&out.stderr)
+            ));
+        }
+
+        // Homebrew Apple Silicon → /opt/homebrew/bin, Intel → /usr/local/bin
+        let current = std::env::var("PATH").unwrap_or_default();
+        std::env::set_var("PATH", format!("/opt/homebrew/bin:/usr/local/bin:{current}"));
+    }
+
     // Installe mkcert via Homebrew si absent
     if which::which("mkcert").is_err() {
         let brew = which::which("brew")
-            .map_err(|_| "Homebrew introuvable. Installez Homebrew depuis https://brew.sh".to_string())?;
+            .map_err(|_| "Homebrew introuvable après installation".to_string())?;
 
         let out = tokio::process::Command::new(&brew)
             .args(["install", "mkcert"])
