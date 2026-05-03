@@ -48,6 +48,8 @@ pub fn run() {
             commands::app::get_onboarding_done,
             commands::app::set_onboarding_done,
             commands::app::get_data_dir,
+            commands::app::check_ssl_ca,
+            commands::app::install_ssl_ca,
             commands::engine::check_docker,
             commands::engine::start_docker,
             commands::engine::install_docker,

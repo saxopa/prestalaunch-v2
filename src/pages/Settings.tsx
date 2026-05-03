@@ -2,12 +2,31 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
 
+type CaStatus = "checking" | "installed" | "not_installed" | "installing" | "error";
+
 export function SettingsPage() {
   const [dataDir, setDataDir] = useState<string>("");
+  const [caStatus, setCaStatus] = useState<CaStatus>("checking");
+  const [caError, setCaError] = useState<string>("");
 
   useEffect(() => {
     invoke<string>("get_data_dir").catch(() => setDataDir("—"));
+    invoke<boolean>("check_ssl_ca")
+      .then((ok) => setCaStatus(ok ? "installed" : "not_installed"))
+      .catch(() => setCaStatus("not_installed"));
   }, []);
+
+  const handleInstallCa = async () => {
+    setCaStatus("installing");
+    setCaError("");
+    try {
+      await invoke("install_ssl_ca");
+      setCaStatus("installed");
+    } catch (e: any) {
+      setCaStatus("error");
+      setCaError(String(e));
+    }
+  };
 
   return (
     <div className="p-6 max-w-2xl">
@@ -47,12 +66,44 @@ export function SettingsPage() {
           <p className="text-xs text-slate-500 mb-3">
             Requis pour activer HTTPS sur les sites locaux
           </p>
-          <div className="bg-surface-800 rounded-lg p-3 space-y-1.5">
-            <p className="text-xs text-slate-300 font-medium">Installation (une seule fois)</p>
-            <code className="block text-xs font-mono text-brand-400 bg-black/40 rounded px-2.5 py-1.5">
-              brew install mkcert && mkcert -install
-            </code>
-          </div>
+          {caStatus === "checking" && (
+            <p className="text-xs text-slate-500">Vérification…</p>
+          )}
+          {caStatus === "installed" && (
+            <div className="flex items-center gap-2 text-xs text-success">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Certificat installé — HTTPS disponible sur tous les sites
+            </div>
+          )}
+          {(caStatus === "not_installed" || caStatus === "error") && (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-400">
+                Le certificat de sécurité local n'est pas encore installé. Votre mot de passe administrateur sera demandé une seule fois.
+              </p>
+              {caStatus === "error" && caError && (
+                <p className="text-xs text-danger bg-danger/10 border border-danger/20 rounded px-3 py-2">{caError}</p>
+              )}
+              <button
+                onClick={handleInstallCa}
+                className="flex items-center gap-2 text-xs font-medium bg-brand-500 hover:bg-brand-600 text-white rounded-lg px-4 py-2 transition-colors"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                Installer le certificat SSL
+              </button>
+            </div>
+          )}
+          {caStatus === "installing" && (
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+              Installation en cours… Validez la fenêtre de votre système si elle apparaît.
+            </div>
+          )}
         </section>
 
         <section className="bg-surface-900 border border-surface-800 rounded-xl p-5">
