@@ -27,6 +27,12 @@ Built with **Tauri v2** · **React 19** · **Rust** · **SQLite** · **Docker Co
 1. Ouvrez le `.dmg` et glissez **PrestaLaunch** dans **Applications**
 2. Clic droit → **Ouvrir** (contournement Gatekeeper — l'app n'est pas signée Apple)
 
+> **Message "fichier endommagé" ?** L'app est bloquée par Gatekeeper. Ouvrez le Terminal et tapez :
+> ```bash
+> xattr -cr /Applications/PrestaLaunch.app
+> ```
+> Puis relancez l'app normalement.
+
 ---
 
 ## Fonctionnalités
