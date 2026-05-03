@@ -13,6 +13,17 @@ pub struct LogProcesses(pub Mutex<HashMap<String, u32>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Les apps macOS lancées depuis le Finder/DMG héritent d'un PATH minimal.
+    // On injecte les chemins Homebrew pour que docker, mkcert, etc. soient trouvables.
+    #[cfg(target_os = "macos")]
+    {
+        let current = std::env::var("PATH").unwrap_or_default();
+        let homebrew = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin";
+        if !current.contains("/opt/homebrew/bin") {
+            std::env::set_var("PATH", format!("{homebrew}:{current}"));
+        }
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
