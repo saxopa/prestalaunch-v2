@@ -252,12 +252,18 @@ async fn run_installer(path: &std::path::Path) -> Result<()> {
             anyhow::bail!("Impossible de monter le DMG Docker");
         }
 
-        // Copy Docker.app to /Applications
-        tokio::process::Command::new("cp")
-            .args(["-R", "/Volumes/Docker/Docker.app", "/Applications/Docker.app"])
+        // Copy Docker.app to /Applications (nécessite droits admin)
+        let copy = tokio::process::Command::new("osascript")
+            .args(["-e", "do shell script \"cp -R /Volumes/Docker/Docker.app /Applications/Docker.app\" with administrator privileges"])
             .output()
             .await
             .context("Copie Docker.app échouée")?;
+        if !copy.status.success() {
+            let _ = tokio::process::Command::new("hdiutil")
+                .args(["detach", "/Volumes/Docker", "-quiet", "-force"])
+                .output().await;
+            anyhow::bail!("Copie de Docker.app annulée ou refusée");
+        }
 
         // Detach DMG
         let _ = tokio::process::Command::new("hdiutil")
