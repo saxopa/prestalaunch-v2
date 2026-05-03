@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            label: macOS-Apple-Silicon
+          - os: macos-13
+            target: x86_64-apple-darwin
+            label: macOS-Intel
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            label: Windows
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build & publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: PrestaLaunch ${{ github.ref_name }}
+          releaseBody: |
+            ## Téléchargement
+
+            | Système | Fichier |
+            |---|---|
+            | macOS Apple Silicon (M1/M2/M3/M4) | `PrestaLaunch_*_aarch64.dmg` |
+            | macOS Intel | `PrestaLaunch_*_x64.dmg` |
+            | Windows | `PrestaLaunch_*_x64-setup.exe` |
+
+            ## Prérequis
+
+            - [Docker Desktop](https://www.docker.com/products/docker-desktop/) installé et en cours d'exécution
+
+            ## Installation macOS
+
+            1. Téléchargez le `.dmg` correspondant à votre Mac
+            2. Ouvrez le fichier et glissez **PrestaLaunch** dans **Applications**
+            3. Au premier lancement : clic droit → Ouvrir (contournement Gatekeeper)
+
+            ## Installation Windows
+
+            1. Téléchargez et exécutez le `.exe`
+            2. Suivez l'assistant d'installation
+
+            ---
+            Créé par [Alexis Pontikis — Ponti'Com](https://ponticom.fr)
+          releaseDraft: false
+          prerelease: false
+          args: --target ${{ matrix.target }}

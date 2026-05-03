@@ -1,14 +1,37 @@
 # PrestaLaunch
 
-Application de bureau macOS pour créer et gérer des sites PrestaShop locaux via Docker, sans toucher à la ligne de commande.
+> Application de bureau pour créer et gérer des sites PrestaShop locaux via Docker, sans ligne de commande.
+
+[![Release](https://img.shields.io/github/v/release/saxopa/prestalaunch-v2?label=télécharger&color=4f46e5)](https://github.com/saxopa/prestalaunch-v2/releases/latest)
+[![License: MIT](https://img.shields.io/badge/licence-MIT-green.svg)](LICENSE)
+[![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%20v2-blue)](https://tauri.app)
 
 Built with **Tauri v2** · **React 19** · **Rust** · **SQLite** · **Docker Compose**
 
 ---
 
+## Télécharger
+
+**[→ Dernière version (Releases)](https://github.com/saxopa/prestalaunch-v2/releases/latest)**
+
+| Système | Fichier à télécharger |
+|---|---|
+| macOS Apple Silicon (M1/M2/M3/M4) | `PrestaLaunch_*_aarch64.dmg` |
+| macOS Intel | `PrestaLaunch_*_x64.dmg` |
+| Windows | `PrestaLaunch_*_x64-setup.exe` |
+
+> **Prérequis unique :** [Docker Desktop](https://www.docker.com/products/docker-desktop/) installé et en cours d'exécution.
+
+### macOS — premier lancement
+
+1. Ouvrez le `.dmg` et glissez **PrestaLaunch** dans **Applications**
+2. Clic droit → **Ouvrir** (contournement Gatekeeper — l'app n'est pas signée Apple)
+
+---
+
 ## Fonctionnalités
 
-- **Créer un site** en quelques clics — choisissez la version PS, PHP, MySQL ; le domaine `.local` et les ports sont configurés automatiquement
+- **Créer un site** en quelques clics — version PS, PHP, MySQL ; domaine `.local` et ports configurés automatiquement
 - **Démarrer / Arrêter** les conteneurs Docker du site
 - **HTTPS local** via mkcert + nginx (installé automatiquement via Homebrew si absent)
 - **phpMyAdmin** intégré par site (port dédié)
@@ -17,48 +40,6 @@ Built with **Tauri v2** · **React 19** · **Rust** · **SQLite** · **Docker Co
 - **Ouvrir dans** Finder, VS Code ou Terminal
 - **Suppression propre** — arrêt des conteneurs, suppression des volumes, nettoyage `/etc/hosts`
 - **Templates** prédéfinis et personnalisables (Standard, Legacy, Dev)
-
----
-
-## Prérequis
-
-| Outil | Version minimale | Notes |
-|-------|-----------------|-------|
-| macOS | 13 Ventura | Apple Silicon & Intel |
-| Docker Desktop | 4.x | Doit être lancé |
-| Homebrew | toute | Pour l'installation auto de mkcert |
-
-> mkcert est installé automatiquement au premier usage HTTPS.
-
----
-
-## Installation
-
-### En développement
-
-```bash
-# Cloner
-git clone https://github.com/alexis/prestalaunch.git
-cd prestalaunch
-
-# Dépendances JS
-npm install
-
-# Lancer (Tauri dev avec hot-reload)
-npm run tauri dev
-```
-
-**Prérequis Rust :**
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-### Build de production
-
-```bash
-npm run tauri build
-# → src-tauri/target/release/bundle/macos/prestalaunch.app
-```
 
 ---
 
@@ -91,10 +72,10 @@ prestalaunch/
 ### Cycle de vie d'un site
 
 ```
-Créer  →  /etc/hosts + docker-compose.yml générés  →  stopped
-Démarrer  →  docker compose up -d  →  starting → running
-Activer HTTPS  →  mkcert + nginx.conf  →  ssl_port assigné
-Désactiver HTTPS  →  nginx stop + ssl_port = NULL
+Créer      →  /etc/hosts + docker-compose.yml générés  →  stopped
+Démarrer   →  docker compose up -d  →  starting → initializing → running
+HTTPS ON   →  mkcert + nginx.conf  →  ssl_port assigné
+HTTPS OFF  →  nginx stop + ssl_port = NULL
 Supprimer  →  docker compose down -v  →  /etc/hosts nettoyé  →  DB supprimée
 ```
 
@@ -103,9 +84,33 @@ Supprimer  →  docker compose down -v  →  /etc/hosts nettoyé  →  DB suppri
 PrestaShop tourne en HTTP pur sur son port dédié. Quand HTTPS est activé :
 
 1. `mkcert domain.local` génère `cert.pem` + `key.pem` dans `sites/<id>/certs/`
-2. Un service **nginx** est ajouté au compose — écoute sur `ssl_port:443`, proxifie vers `prestashop:80`
-3. Le header `Host: domain.local:<port>` est transmis pour que PrestaShop reconnaisse ses propres URLs
+2. Un service **nginx** est ajouté au compose — écoute sur `ssl_port`, proxifie vers `prestashop:80`
+3. Le header `Host` est transmis pour que PrestaShop reconnaisse ses URLs
 4. PrestaShop reste en mode HTTP ; nginx assure la terminaison TLS
+
+---
+
+## Développement
+
+**Prérequis :** [Rust](https://rustup.rs), [Node.js 20+](https://nodejs.org), [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+
+```bash
+git clone https://github.com/saxopa/prestalaunch-v2.git
+cd prestalaunch-v2
+npm install
+npm run tauri dev
+```
+
+```bash
+# Type-check frontend
+npx tsc --noEmit
+
+# Check Rust
+cd src-tauri && cargo check
+
+# Build de production
+npm run tauri build
+```
 
 ---
 
@@ -118,7 +123,7 @@ sites (
   port INTEGER UNIQUE, pma_port INTEGER UNIQUE,
   ssl_port INTEGER,   -- NULL si HTTPS inactif
   mail_port INTEGER,  -- NULL si Mailpit inactif
-  status TEXT,        -- stopped | starting | running | error
+  status TEXT,        -- stopped | starting | initializing | running | error
   created_at TEXT
 )
 
@@ -151,23 +156,6 @@ settings (key TEXT PRIMARY KEY, value TEXT)
 
 ---
 
-## Développement
-
-```bash
-# Type-check frontend
-npx tsc --noEmit
-
-# Check Rust
-cd src-tauri && cargo check
-
-# Hot-reload complet
-npm run tauri dev
-```
-
-Les migrations SQLite sont appliquées automatiquement au démarrage via `sqlx::migrate!`.
-
----
-
 ## Licence
 
-Projet privé — Alexis Pontikis / Ponti'Com
+MIT — © 2025 [Alexis Pontikis — Ponti'Com](https://ponticom.fr)
