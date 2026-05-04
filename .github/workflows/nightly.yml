@@ -64,6 +64,6 @@ jobs:
             | macOS Apple Silicon (M1/M2/M3/M4) | `PrestaLaunch_*_aarch64.dmg` |
             | macOS Intel | `PrestaLaunch_*_x64.dmg` |
             | Windows | `PrestaLaunch_*_x64-setup.exe` |
-          releaseDraft: false
-          prerelease: true
+          releaseDraft: true
+          prerelease: false
           args: --target ${{ matrix.target }}
