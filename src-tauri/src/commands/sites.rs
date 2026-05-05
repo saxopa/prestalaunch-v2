@@ -16,9 +16,12 @@ async fn update_prestashop_ssl_config(site_id: &str, domain: &str, ssl_port: Opt
         (format!("{domain}:{http_port}"), "0")
     };
 
+    let http_domain = format!("{domain}:{http_port}");
     let sql = format!(
-        "UPDATE ps_configuration SET value = '{domain_val}' WHERE name IN ('PS_SHOP_DOMAIN', 'PS_SHOP_DOMAIN_SSL'); \
-         UPDATE ps_configuration SET value = '{ssl_enabled}' WHERE name IN ('PS_SSL_ENABLED', 'PS_SSL_ENABLED_EVERYWHERE');"
+        "UPDATE ps_configuration SET value = '{http_domain}' WHERE name = 'PS_SHOP_DOMAIN'; \
+         UPDATE ps_configuration SET value = '{domain_val}' WHERE name = 'PS_SHOP_DOMAIN_SSL'; \
+         UPDATE ps_configuration SET value = '{ssl_enabled}' WHERE name IN ('PS_SSL_ENABLED', 'PS_SSL_ENABLED_EVERYWHERE'); \
+         UPDATE ps_shop_url SET domain = '{http_domain}', domain_ssl = '{domain_val}' WHERE main = 1;"
     );
 
     let _ = tokio::process::Command::new("docker")
