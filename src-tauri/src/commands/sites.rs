@@ -275,6 +275,9 @@ pub async fn start_site(
         let pool_bg = pool.inner().clone();
         let id = site_id.clone();
         let url = format!("http://{}:{}", site.domain, site.port);
+        let bg_domain = site.domain.clone();
+        let bg_ssl_port = site.ssl_port;
+        let bg_http_port = site.port;
         tokio::spawn(async move {
             let client = reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(10))
@@ -309,6 +312,9 @@ pub async fn start_site(
                             .bind(&id)
                             .execute(&pool_bg)
                             .await;
+                        // Synchroniser la config PS SSL dès que PrestaShop répond
+                        // (couvre aussi les fresh installs où l'activation SSL était prématurée)
+                        update_prestashop_ssl_config(&id, &bg_domain, bg_ssl_port, bg_http_port).await;
                         break;
                     }
                 }
@@ -548,7 +554,7 @@ pub async fn enable_ssl(
     }
 
     // Écrire nginx.conf
-    let nginx_conf = compose::generate_nginx_conf(&site.domain, site.port);
+    let nginx_conf = compose::generate_nginx_conf(&site.domain);
     tokio::fs::write(dir.join("nginx.conf"), nginx_conf)
         .await
         .map_err(|e| e.to_string())?;
@@ -571,16 +577,18 @@ pub async fn enable_ssl(
         .await
         .map_err(|e| e.to_string())?;
 
-    // Appliquer si le site tourne
-    if site.status == "running" {
+    // Lancer nginx si le site tourne (ou initialise encore)
+    if site.status == "running" || site.status == "initializing" {
         let _ = tokio::process::Command::new("docker")
             .args(["compose", "up", "-d", "--no-recreate"])
             .current_dir(&dir)
             .output()
             .await;
-
-        update_prestashop_ssl_config(&site_id, &site.domain, Some(ssl_port), site.port).await;
     }
+
+    // Toujours tenter la sync PS — échoue silencieusement si mysql n'est pas up
+    // Si PS est encore en train d'installer, le polling start_site la fera au passage à "running"
+    update_prestashop_ssl_config(&site_id, &site.domain, Some(ssl_port), site.port).await;
 
     let updated = sqlx::query_as::<_, Site>("SELECT * FROM sites WHERE id = ?")
         .bind(&site_id)
